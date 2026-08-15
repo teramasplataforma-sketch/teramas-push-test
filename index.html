@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -98,6 +99,34 @@
             transform: translateY(0);
         }
 
+        /* BOTÓN NOTIFICACIONES */
+
+        .boton-notificaciones {
+            display: block;
+            width: 100%;
+            margin-top: 14px;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 12px;
+            background: #e9e9e9;
+            color: #222222;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .boton-notificaciones:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        .estado-notificaciones {
+            min-height: 20px;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #777777;
+        }
+
         .marca-teramas {
             margin-top: 22px;
             font-size: 12px;
@@ -150,11 +179,6 @@
 
         <div class="logo-comercio">
 
-            <!--
-                Más adelante el comercio tendrá aquí
-                automáticamente su propio logo.
-            -->
-
             <span class="logo-placeholder">
                 LOGO
             </span>
@@ -181,6 +205,19 @@
             VER PUBLICACIÓN
         </a>
 
+        <button
+            id="boton-notificaciones"
+            class="boton-notificaciones"
+            type="button"
+        >
+            🔔 ACTIVAR NOTIFICACIONES
+        </button>
+
+        <div
+            id="estado-notificaciones"
+            class="estado-notificaciones"
+        ></div>
+
         <div class="marca-teramas">
             Notificación mediante <strong>TERAmas App</strong>
         </div>
@@ -189,115 +226,263 @@
 
     <script src="app.js"></script>
 
-<script>
-(async function () {
+    <script>
 
-  const WORKER_URL =
-    "https://teramas-notificaciones.teramasplataforma.workers.dev";
+        const WORKER_URL =
+            "https://teramas-notificaciones.teramasplataforma.workers.dev";
 
-  function base64UrlToUint8Array(base64Url) {
-    const padding =
-      "=".repeat((4 - (base64Url.length % 4)) % 4);
+        const botonNotificaciones =
+            document.getElementById(
+                "boton-notificaciones"
+            );
 
-    const base64 =
-      (base64Url + padding)
-        .replace(/-/g, "+")
-        .replace(/_/g, "/");
+        const estadoNotificaciones =
+            document.getElementById(
+                "estado-notificaciones"
+            );
 
-    const rawData = atob(base64);
 
-    return Uint8Array.from(
-      [...rawData].map(char => char.charCodeAt(0))
-    );
-  }
+        function base64UrlToUint8Array(base64Url) {
 
-  try {
+            const padding =
+                "=".repeat(
+                    (4 - (base64Url.length % 4)) % 4
+                );
 
-    // 1. Registrar Service Worker
-    const registration =
-      await navigator.serviceWorker.register("/sw.js");
+            const base64 =
+                (base64Url + padding)
+                    .replace(/-/g, "+")
+                    .replace(/_/g, "/");
 
-    await navigator.serviceWorker.ready;
+            const rawData =
+                atob(base64);
 
-    // 2. Obtener clave pública VAPID
-    const response =
-      await fetch(
-        WORKER_URL + "/vapid-public-key"
-      );
-
-    const data =
-      await response.json();
-
-    if (!data.publicKey) {
-      console.error(
-        "TERAmas: no se recibió VAPID_PUBLIC_KEY."
-      );
-      return;
-    }
-
-    // 3. Pedir permiso para notificaciones
-    const permission =
-      await Notification.requestPermission();
-
-    if (permission !== "granted") {
-      console.log(
-        "TERAmas: notificaciones no autorizadas."
-      );
-      return;
-    }
-
-    // 4. Obtener suscripción existente
-    let subscription =
-      await registration.pushManager.getSubscription();
-
-    // 5. Si no existe, crearla
-    if (!subscription) {
-
-      subscription =
-        await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey:
-            base64UrlToUint8Array(
-              data.publicKey
-            )
-        });
-    }
-
-    // 6. Guardar suscripción en Cloudflare
-    const saveResponse =
-      await fetch(
-        WORKER_URL + "/subscribe",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body:
-            JSON.stringify(subscription)
+            return Uint8Array.from(
+                [...rawData].map(
+                    char => char.charCodeAt(0)
+                )
+            );
         }
-      );
 
-    const saveResult =
-      await saveResponse.json();
 
-    console.log(
-      "TERAmas Push:",
-      saveResult
-    );
+        async function activarNotificaciones() {
 
-  } catch (error) {
+            botonNotificaciones.disabled = true;
 
-    console.error(
-      "TERAmas Push ERROR:",
-      error
-    );
+            estadoNotificaciones.textContent =
+                "Activando notificaciones...";
 
-  }
+            try {
 
-})();
-</script>
+                if (
+                    !("serviceWorker" in navigator)
+                ) {
+                    throw new Error(
+                        "Este navegador no admite Service Worker."
+                    );
+                }
+
+                if (
+                    !("PushManager" in window)
+                ) {
+                    throw new Error(
+                        "Este navegador no admite Push."
+                    );
+                }
+
+                if (
+                    !("Notification" in window)
+                ) {
+                    throw new Error(
+                        "Este navegador no admite notificaciones."
+                    );
+                }
+
+
+                /*
+                 * IMPORTANTE:
+                 * GitHub Pages publica este proyecto
+                 * dentro de /teramas-push-test/
+                 */
+
+                const registration =
+                    await navigator.serviceWorker.register(
+                        "/teramas-push-test/sw.js",
+                        {
+                            scope:
+                                "/teramas-push-test/"
+                        }
+                    );
+
+
+                await navigator.serviceWorker.ready;
+
+
+                /*
+                 * Obtener VAPID pública
+                 */
+
+                const response =
+                    await fetch(
+                        WORKER_URL +
+                        "/vapid-public-key"
+                    );
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "No se pudo obtener la clave VAPID."
+                    );
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                if (!data.publicKey) {
+
+                    throw new Error(
+                        "Cloudflare no devolvió la clave pública."
+                    );
+                }
+
+
+                /*
+                 * Pedir permiso SOLO cuando
+                 * el usuario pulsa el botón.
+                 */
+
+                const permission =
+                    await Notification.requestPermission();
+
+
+                if (permission !== "granted") {
+
+                    estadoNotificaciones.textContent =
+                        "Las notificaciones no fueron autorizadas.";
+
+                    botonNotificaciones.disabled = false;
+
+                    return;
+                }
+
+
+                /*
+                 * Buscar suscripción existente.
+                 */
+
+                let subscription =
+                    await registration.pushManager
+                        .getSubscription();
+
+
+                /*
+                 * Crear nueva suscripción
+                 * si todavía no existe.
+                 */
+
+                if (!subscription) {
+
+                    subscription =
+                        await registration.pushManager
+                            .subscribe({
+
+                                userVisibleOnly: true,
+
+                                applicationServerKey:
+                                    base64UrlToUint8Array(
+                                        data.publicKey
+                                    )
+                            });
+                }
+
+
+                /*
+                 * Guardar suscripción en Cloudflare.
+                 */
+
+                const saveResponse =
+                    await fetch(
+                        WORKER_URL +
+                        "/subscribe",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body:
+                                JSON.stringify(
+                                    subscription
+                                )
+                        }
+                    );
+
+
+                if (!saveResponse.ok) {
+
+                    throw new Error(
+                        "Cloudflare rechazó la suscripción."
+                    );
+                }
+
+
+                const saveResult =
+                    await saveResponse.json();
+
+
+                console.log(
+                    "TERAmas Push:",
+                    saveResult
+                );
+
+
+                if (
+                    saveResult.correcto
+                ) {
+
+                    estadoNotificaciones.textContent =
+                        "✅ Notificaciones activadas.";
+
+                    botonNotificaciones.textContent =
+                        "🔔 NOTIFICACIONES ACTIVAS";
+
+                } else {
+
+                    throw new Error(
+                        "La suscripción no pudo guardarse."
+                    );
+                }
+
+
+            } catch (error) {
+
+                console.error(
+                    "TERAmas Push ERROR:",
+                    error
+                );
+
+                estadoNotificaciones.textContent =
+                    "Error: " +
+                    error.message;
+
+                botonNotificaciones.disabled =
+                    false;
+            }
+        }
+
+
+        botonNotificaciones.addEventListener(
+            "click",
+            activarNotificaciones
+        );
+
+    </script>
+
 </body>
 </html>
+```
